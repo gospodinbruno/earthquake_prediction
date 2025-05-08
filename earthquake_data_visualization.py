@@ -3,6 +3,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.colors import LogNorm
+from datetime import datetime
+import contextily as ctx
+import plotly.express as px
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
 # Load data
 data = pd.read_csv('cleaned_earthquake_catalogue.csv')
@@ -18,7 +23,6 @@ data['Hour'] = data['Datetime'].dt.hour
 data['Timestamp'] = (data['Datetime'] - pd.Timestamp("1970-01-01")) / pd.Timedelta(seconds=1)
 
 # Filter: Magnitudes >= 2.0
-data = data[data['Magnitude'] >= 2.0].reset_index(drop=True)
 
 # --- Plot 1: Magnitude histogram ---
 plt.figure(figsize=(10, 6))
@@ -81,7 +85,7 @@ athens_data = data[(data['Longitude'] >= lon_min) & (data['Longitude'] <= lon_ma
 # Create scatter plot with point size and color based on magnitude
 scatter = plt.scatter(athens_data['Longitude'], athens_data['Latitude'], 
                      c=athens_data['Magnitude'], cmap='YlOrRd', 
-                     alpha=0.7, s=athens_data['Magnitude']**2, 
+                     alpha=0.7, s=10 ** (athens_data['Magnitude'] - 2), 
                      edgecolor='k', linewidth=0.3)
 
 # Add colorbar
@@ -99,24 +103,6 @@ plt.ylim(lat_min, lat_max)
 plt.grid(True, linestyle='--', alpha=0.6)
 
 # Add title and labels
-plt.title('Earthquake Epicenters in Athens Region', fontsize=16)
-plt.xlabel('Longitude')
-plt.ylabel('Latitude')
-plt.legend()
-
-try:
-    # Try to add basemap using contextily
-    import contextily as ctx
-    
-    # Convert axes to web mercator projection
-    ctx.add_basemap(plt.gca(), crs="EPSG:4326", source=ctx.providers.OpenStreetMap.Mapnik)
-    
-    plt.title('Earthquake Epicenters with Map Background (Athens Region)', fontsize=16)
-except Exception as e:
-    print(f"Couldn't add map background: {e}")
-    
-plt.tight_layout()
-plt.show()
 
 # --- Plot 7: Average magnitude by month ---
 plt.figure(figsize=(10, 5))
@@ -138,6 +124,69 @@ plt.ylabel('Count')
 plt.tight_layout()
 plt.show()
 
+# --- Plot 7: Magnitude and Depth histograms side by side ---
+plt.figure(figsize=(14, 5))
+plt.subplot(1, 2, 1)
+plt.hist(data['Magnitude'], bins=20, color='lightgreen', edgecolor='black', alpha=0.7)
+sns.kdeplot(data['Magnitude'], color='green', lw=1)
+plt.title('Earthquake Magnitude Data')
+plt.xlabel('Magnitude Scale')
+plt.ylabel('Number of Earthquakes')
 
+plt.subplot(1, 2, 2)
+plt.hist(data['Depth'], bins=20, color='lightblue', edgecolor='black', alpha=0.7)
+sns.kdeplot(data['Depth'], color='blue', lw=1)
+plt.title('Earthquake Depth Data')
+plt.xlabel('Depth (km)')
+plt.ylabel('Number of Earthquakes')
+
+plt.tight_layout()
+plt.show()
+
+# Load and filter data
+data = pd.read_csv("cleaned_earthquake_catalogue.csv")
+data['Datetime'] = pd.to_datetime(data['Datetime'])
+data['Year'] = data['Datetime'].dt.year
+
+# Filter last 15 years & keep magnitudes >= 2.0
+recent = data[(data['Year'] >= datetime.now().year - 15) & (data['Magnitude'] >= 2)].copy()
+
+# Add a new 'Size' column: non-linear scaling for visual impact
+recent['Size'] = recent['Magnitude'] ** 3  # or try np.exp(Mag)
+
+# Plot with Plotly
+filtered = data[(data['Year'] >= datetime.now().year - 5) & (data['Magnitude'] >= 2.5)]
+
+# Create Plotly Geo scatter
+fig = px.scatter_geo(
+    filtered,
+    lat='Latitude',
+    lon='Longitude',
+    color='Magnitude',
+    color_continuous_scale='Plasma',
+    projection='natural earth',
+    scope='europe',  # or 'world' for global
+    title='Earthquake Locations by Magnitude (Last 15 Years)',
+    opacity=0.7,
+)
+
+# Style the map
+fig.update_geos(
+    showland=True, landcolor="rgb(230, 230, 230)",
+    showcountries=True, countrycolor="gray",
+    showcoastlines=True, coastlinecolor="gray"
+)
+
+fig.update_layout(
+    margin={"r":0,"t":40,"l":0,"b":0},
+    coloraxis_colorbar=dict(
+        title="Magnitude",
+        tickfont=dict(size=20),
+        titlefont=dict(size=22)
+    )
+)
+
+# Display
+fig.show()
 
 

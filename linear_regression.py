@@ -2,13 +2,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.inspection import permutation_importance
-from scipy import stats
 
-def run_knn_regression(data):
+def run_linear_regression(data):
     # --- Feature preparation ---
     athens_center_lat = 37.9838
     athens_center_lon = 23.7275
@@ -42,14 +41,12 @@ def run_knn_regression(data):
     x_test_scaled = scaler.transform(x_test)
 
     # --- Model ---
-    model = KNeighborsRegressor(
-        n_neighbors=5,
-        weights='distance',
-        algorithm='auto',
-        p=2,  # Euclidean distance
+    model = LinearRegression(
+        fit_intercept=True,
         n_jobs=-1
     )
     
+    print("Training Linear Regression model...")
     model.fit(x_train_scaled, y_train)
     y_pred = model.predict(x_test_scaled)
 
@@ -57,7 +54,7 @@ def run_knn_regression(data):
     mae = mean_absolute_error(y_test, y_pred)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
-    print(f"🏠 kNN Regression Performance:\nMAE: {mae:.4f}\nRMSE: {rmse:.4f}\nR²: {r2:.4f}")
+    print(f"📏 Linear Regression Performance:\nMAE: {mae:.4f}\nRMSE: {rmse:.4f}\nR²: {r2:.4f}")
 
     # --- Plot 1: True vs Predicted ---
     plt.figure(figsize=(8, 6))
@@ -92,7 +89,18 @@ def run_knn_regression(data):
     plt.tight_layout()
     plt.show()
 
-    # --- Plot 4: Distribution of True vs Predicted ---
+    # --- Plot 4: Residuals vs Predicted ---
+    plt.figure(figsize=(8, 6))
+    plt.scatter(y_pred, residuals, alpha=0.5)
+    plt.axhline(0, color='red', linestyle='--')
+    plt.xlabel('Predicted Magnitude')
+    plt.ylabel('Residual')
+    plt.title('Residuals vs Predicted Magnitude')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    # --- Plot 5: Distribution of True vs Predicted ---
     plt.figure(figsize=(8, 5))
     sns.histplot(y_test, color='blue', label='True', kde=True, stat='density', bins=30, alpha=0.5)
     sns.histplot(y_pred, color='orange', label='Predicted', kde=True, stat='density', bins=30, alpha=0.5)
@@ -103,7 +111,17 @@ def run_knn_regression(data):
     plt.tight_layout()
     plt.show()
     
-    # --- Plot 5: Permutation Importance ---
+    # --- Plot 6: Coefficients/Feature Importance ---
+    coef = pd.Series(model.coef_, index=features)
+    plt.figure(figsize=(8, 5))
+    coef.sort_values().plot(kind='barh', color='purple')
+    plt.title('Linear Regression Coefficients')
+    plt.xlabel('Coefficient Value')
+    plt.axvline(0, color='red', linestyle='--')
+    plt.tight_layout()
+    plt.show()
+    
+    # --- Plot 7: Permutation Importance ---
     try:
         perm_importance = permutation_importance(model, x_test_scaled, y_test, 
                                                n_repeats=10, random_state=42)
@@ -120,7 +138,7 @@ def run_knn_regression(data):
     except Exception as e:
         print(f"Could not calculate permutation importance: {e}")
 
-    # --- Plot 6: Error by Depth Bin ---
+    # --- Plot 8: Error by Depth Bin ---
     depth_bins = pd.cut(data['Depth'].iloc[split_idx:], bins=10)
     error_by_depth = pd.DataFrame({'residual': residuals, 'bin': depth_bins})
     grouped = error_by_depth.groupby('bin')['residual'].agg(['mean', 'std'])
@@ -134,7 +152,7 @@ def run_knn_regression(data):
     plt.tight_layout()
     plt.show()
     
-    # --- Plot 7: Error by Magnitude Range ---
+    # --- Plot 9: Error by Magnitude Range ---
     mag_bins = pd.cut(y_test, bins=5)
     error_by_mag = pd.DataFrame({'error': np.abs(residuals), 'bin': mag_bins})
     grouped_mag = error_by_mag.groupby('bin')['error'].agg(['mean', 'std'])
@@ -148,37 +166,47 @@ def run_knn_regression(data):
     plt.tight_layout()
     plt.show()
     
-    # --- Plot 8: kNN-specific: Effect of number of neighbors ---
-    n_neighbors_range = range(1, 21)
-    mae_scores = []
-    r2_scores = []
+    # --- Plot 10: LR-specific: Simple vs Polynomial Features ---
+    degrees = [1, 2, 3]
+    models_mae = []
+    models_r2 = []
     
-    for n in n_neighbors_range:
-        temp_model = KNeighborsRegressor(n_neighbors=n, weights='distance')
-        temp_model.fit(x_train_scaled, y_train)
-        temp_pred = temp_model.predict(x_test_scaled)
-        mae_scores.append(mean_absolute_error(y_test, temp_pred))
-        r2_scores.append(r2_score(y_test, temp_pred))
+    for degree in degrees:
+        # Create polynomial features
+        poly = PolynomialFeatures(degree=degree, include_bias=False)
+        x_train_poly = poly.fit_transform(x_train_scaled)
+        x_test_poly = poly.transform(x_test_scaled)
+        
+        # Fit a model
+        poly_model = LinearRegression()
+        poly_model.fit(x_train_poly, y_train)
+        poly_pred = poly_model.predict(x_test_poly)
+        
+        # Calculate performance metrics
+        poly_mae = mean_absolute_error(y_test, poly_pred)
+        poly_r2 = r2_score(y_test, poly_pred)
+        
+        models_mae.append(poly_mae)
+        models_r2.append(poly_r2)
     
-    plt.figure(figsize=(12, 5))
+    # Plot the results
+    plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
-    plt.plot(n_neighbors_range, mae_scores, 'o-', color='blue')
-    plt.title('MAE vs Number of Neighbors')
-    plt.xlabel('Number of Neighbors')
+    plt.bar(['Linear', 'Quadratic', 'Cubic'], models_mae, color='maroon')
+    plt.title('Effect of Polynomial Degree on MAE')
     plt.ylabel('Mean Absolute Error')
-    plt.grid(True)
+    plt.grid(True, axis='y')
     
     plt.subplot(1, 2, 2)
-    plt.plot(n_neighbors_range, r2_scores, 'o-', color='green')
-    plt.title('R² vs Number of Neighbors')
-    plt.xlabel('Number of Neighbors')
+    plt.bar(['Linear', 'Quadratic', 'Cubic'], models_r2, color='navy')
+    plt.title('Effect of Polynomial Degree on R²')
     plt.ylabel('R² Score')
-    plt.grid(True)
+    plt.grid(True, axis='y')
     
     plt.tight_layout()
     plt.show()
     
-    # --- Plot 9: Geographic Distribution of Errors ---
+    # --- Plot 11: Geographic Distribution of Errors ---
     plt.figure(figsize=(10, 8))
     sc = plt.scatter(data['Longitude'].iloc[split_idx:], data['Latitude'].iloc[split_idx:], 
                     c=np.abs(residuals), cmap='Reds', alpha=0.7, s=50)
@@ -190,8 +218,9 @@ def run_knn_regression(data):
     plt.tight_layout()
     plt.show()
     
-    # --- Plot 10: QQ Plot for Residuals (to check for normality) ---
+    # --- Plot 12: QQ Plot for Residuals (to check for normality) ---
     plt.figure(figsize=(8, 6))
+    from scipy import stats
     stats.probplot(residuals, dist="norm", plot=plt)
     plt.title('QQ Plot of Residuals')
     plt.grid(True)
@@ -205,8 +234,8 @@ if __name__ == "__main__":
         data = pd.read_csv("cleaned_earthquake_catalogue.csv")
         print(f"Loaded dataset with {len(data)} records")
         
-        # Run the kNN regression analysis
-        run_knn_regression(data)
+        # Run the Linear Regression analysis
+        run_linear_regression(data)
     except Exception as e:
         print(f"Error: {e}")
         print("Please make sure the cleaned_earthquake_catalogue.csv file exists in the current directory") 

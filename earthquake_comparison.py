@@ -44,6 +44,20 @@ print(data_sample['Datetime'].head())
 print("\nLast 5 Timestamps (Test End):")
 print(data_sample['Datetime'].tail())
 
+
+# Magnitude Range Counts
+magnitude_ranges = {
+    'Minor (< 2.0)': (0, 2.0),
+    'Light (2.0 - 3.0)': (2.0, 3.0),
+    'Moderate (3.0 - 4.0)': (3.0, 4.0),
+    'Strong (≥ 4.0)': (4.0, float('inf'))
+}
+
+print("\n📊 Magnitude Range Distribution (in Sampled Data):")
+for range_name, (min_mag, max_mag) in magnitude_ranges.items():
+    count = ((data_sample['Magnitude'] >= min_mag) & (data_sample['Magnitude'] < max_mag)).sum()
+    print(f"{range_name}: {count} samples")
+
 scaler = MinMaxScaler()
 x_train_scaled = scaler.fit_transform(x_train)
 x_test_scaled = scaler.transform(x_test)

@@ -166,7 +166,7 @@ fig = px.scatter_geo(
     color_continuous_scale='Plasma',
     projection='natural earth',
     scope='europe',  # or 'world' for global
-    title='Earthquake Locations by Magnitude (Last 15 Years)',
+    title='Earthquake Locations by Magnitude (Last 5 Years)',
     opacity=0.7,
 )
 

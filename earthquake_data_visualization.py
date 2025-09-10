@@ -4,13 +4,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.colors import LogNorm
 from datetime import datetime
-import contextily as ctx
 import plotly.express as px
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
+
 
 # Load data
-data = pd.read_csv('cleaned_earthquake_catalogue.csv')
+data = pd.read_csv('earthquake_2000_2021.csv')
 data['Datetime'] = pd.to_datetime(data['Datetime'])
 
 # Add useful features

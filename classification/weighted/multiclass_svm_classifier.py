@@ -3,10 +3,10 @@ import numpy as np
 from sklearn.svm import SVC
 from sklearn.metrics import (
     classification_report, confusion_matrix, f1_score,
-    roc_curve, auc, precision_recall_curve, average_precision_score
+    roc_curve, auc, precision_recall_curve, average_precision_score, matthews_corrcoef
 )
 from sklearn.preprocessing import label_binarize, StandardScaler
-from imblearn.over_sampling import SMOTE
+from sklearn.inspection import permutation_importance
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import timedelta
@@ -61,25 +61,11 @@ y_train = train_df['MagClass']
 X_test = test_df[features]
 y_test = test_df['MagClass']
 
-majority_class_count = max(np.bincount(y_train))
-target_counts = {
-    0: majority_class_count,
-    1: int(majority_class_count * 0.7),
-    2: int(majority_class_count * 0.3)
-}
-
-smote = SMOTE(sampling_strategy=target_counts, random_state=42)
-X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
-
-print(f"\nClass distribution after conservative SMOTE:")
-unique, counts = np.unique(y_train_balanced, return_counts=True)
+print(f"\nClass distribution in training data:")
+unique, counts = np.unique(y_train, return_counts=True)
 for class_label, count in zip(unique, counts):
     print(f"Class {class_label}: {count}")
-print(f"Total balanced training samples: {len(X_train_balanced)}")
-
-
-X_train = X_train_balanced
-y_train = y_train_balanced
+print(f"Total training samples: {len(X_train)}")
 
 
 scaler = StandardScaler()
@@ -103,7 +89,25 @@ y_prob = clf.predict_proba(X_test_scaled)
 
 print("\n=== Weighted Multiclass SVM Classification Report ===")
 print(classification_report(y_test, y_pred, digits=3, target_names=['0–1.9', '2–3.9', '4+']))
-print("Macro F1 Score:", f1_score(y_test, y_pred, average='macro'))
+
+f1_macro = f1_score(y_test, y_pred, average='macro')
+f1_weighted = f1_score(y_test, y_pred, average='weighted')
+print(f"Macro F1 Score:    {f1_macro:.3f}")
+print(f"Weighted F1 Score: {f1_weighted:.3f}")
+
+# ===== MCC (multiclass) =====
+mcc_overall = matthews_corrcoef(y_test, y_pred)
+print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
+
+classes = [0, 1, 2]
+mcc_ovr = {}
+for c in classes:
+    y_true_bin = (y_test == c).astype(int)
+    y_pred_bin = (y_pred == c).astype(int)
+    mcc_ovr[c] = matthews_corrcoef(y_true_bin, y_pred_bin)
+print("One-vs-Rest MCC per class:")
+for c, m in mcc_ovr.items():
+    print(f"  Class {magnitude_labels[c]}: {m:.3f}")
 
 
 cm = confusion_matrix(y_test, y_pred)
@@ -126,6 +130,21 @@ print(f"Number of Support Vectors: {clf.n_support_}")
 print(f"Total Support Vectors: {sum(clf.n_support_)}")
 print(f"Training samples after balancing: {len(X_train)}")
 
+# Feature importance using permutation importance
+print("\nCalculating feature importance using permutation importance...")
+perm_importance = permutation_importance(clf, X_test_scaled, y_test, n_repeats=10, random_state=42)
+feature_importance = pd.Series(perm_importance.importances_mean, index=features).sort_values(ascending=False)
+print("\nFeature Importances (Permutation Importance):")
+print(feature_importance)
+
+plt.figure(figsize=(10, 6))
+feature_importance.plot(kind='barh')
+plt.title('Feature Importances (Weighted SVM)')
+plt.xlabel('Permutation Importance')
+plt.gca().invert_yaxis()
+plt.grid(True, axis='x')
+plt.tight_layout()
+plt.show()
 
 y_test_bin = label_binarize(y_test, classes=[0, 1, 2])
 fpr, tpr, roc_auc = {}, {}, {}
@@ -180,4 +199,4 @@ print(f"Training samples (balanced): {len(X_train)}")
 print(f"Test samples: {len(X_test)}")
 print(f"Features used: {len(features)}")
 print(f"Classes: 3 (0–1.9, 2–3.9, 4+ magnitude)")
-print(f"Balancing method: SMOTE + class_weight='balanced'")
+print(f"Balancing method: class_weight='balanced'")

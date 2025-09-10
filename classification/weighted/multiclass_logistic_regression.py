@@ -3,16 +3,15 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     classification_report, confusion_matrix, f1_score,
-    roc_curve, auc, precision_recall_curve, average_precision_score
+    roc_curve, auc, precision_recall_curve, average_precision_score, matthews_corrcoef
 )
 from sklearn.preprocessing import label_binarize, StandardScaler
-from imblearn.over_sampling import SMOTE
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import timedelta
 
-
-df = pd.read_csv('../../earthquake_2015_onwards_corrected.csv', parse_dates=['Datetime'])
+# Load and sort data
+df = pd.read_csv('../../earthquake_2000_2021.csv', parse_dates=['Datetime'])
 df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
@@ -50,8 +49,8 @@ X = df[features]
 y = df['MagClass']
 
 
-train_start = pd.Timestamp("2015-01-01")
-train_end = pd.Timestamp("2020-01-01")
+train_start = pd.Timestamp("2000-01-01")
+train_end = pd.Timestamp("2017-01-01")
 train_df = df[(df['Datetime'] >= train_start) & (df['Datetime'] < train_end)].copy()
 test_df = df[df['Datetime'] >= train_end].copy()
 
@@ -60,25 +59,11 @@ y_train = train_df['MagClass']
 X_test = test_df[features]
 y_test = test_df['MagClass']
 
-majority_class_count = max(np.bincount(y_train))
-target_counts = {
-    0: majority_class_count,
-    1: int(majority_class_count * 0.7),
-    2: int(majority_class_count * 0.3)
-}
-
-smote = SMOTE(sampling_strategy=target_counts, random_state=42)
-X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
-
-print(f"\nClass distribution after conservative SMOTE:")
-unique, counts = np.unique(y_train_balanced, return_counts=True)
+print(f"\nClass distribution in training data:")
+unique, counts = np.unique(y_train, return_counts=True)
 for class_label, count in zip(unique, counts):
     print(f"Class {class_label}: {count}")
-print(f"Total balanced training samples: {len(X_train_balanced)}")
-
-
-X_train = X_train_balanced
-y_train = y_train_balanced
+print(f"Total training samples: {len(X_train)}")
 
 
 scaler = StandardScaler()
@@ -91,6 +76,7 @@ clf = LogisticRegression(
     multi_class='multinomial',
     solver='lbfgs',
     max_iter=1000,
+    class_weight='balanced',
     random_state=42
 )
 clf.fit(X_train_scaled, y_train)
@@ -114,10 +100,42 @@ plt.tight_layout()
 plt.legend(title="Magnitude Class")
 plt.show()
 
+# Feature importance using coefficient magnitudes (average across classes)
+feature_importance = np.abs(coef_df).mean(axis=0).sort_values(ascending=False)
+print("\nFeature Importances (Average Absolute Coefficients):")
+print(feature_importance)
+
+plt.figure(figsize=(10, 6))
+feature_importance.plot(kind='barh')
+plt.title('Feature Importances (Weighted Logistic Regression)')
+plt.xlabel('Importance')
+plt.gca().invert_yaxis()
+plt.grid(True, axis='x')
+plt.tight_layout()
+plt.show()
+
 
 print("\n=== Weighted Multiclass Logistic Regression Classification Report ===")
 print(classification_report(y_test, y_pred, digits=3, target_names=['0–1.9', '2–3.9', '4+']))
-print("Macro F1 Score:", f1_score(y_test, y_pred, average='macro'))
+
+f1_macro = f1_score(y_test, y_pred, average='macro')
+f1_weighted = f1_score(y_test, y_pred, average='weighted')
+print(f"Macro F1 Score:    {f1_macro:.3f}")
+print(f"Weighted F1 Score: {f1_weighted:.3f}")
+
+# ===== MCC (multiclass) =====
+mcc_overall = matthews_corrcoef(y_test, y_pred)
+print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
+
+classes = [0, 1, 2]
+mcc_ovr = {}
+for c in classes:
+    y_true_bin = (y_test == c).astype(int)
+    y_pred_bin = (y_pred == c).astype(int)
+    mcc_ovr[c] = matthews_corrcoef(y_true_bin, y_pred_bin)
+print("One-vs-Rest MCC per class:")
+for c, m in mcc_ovr.items():
+    print(f"  Class {magnitude_labels[c]}: {m:.3f}")
 
 
 cm = confusion_matrix(y_test, y_pred)
@@ -191,5 +209,5 @@ print(f"Training samples (balanced): {len(X_train)}")
 print(f"Test samples: {len(X_test)}")
 print(f"Features used: {len(features)}")
 print(f"Classes: 3 (0–1.9, 2–3.9, 4+ magnitude)")
-print(f"Balancing method: SMOTE + class_weight='balanced'")
+print(f"Balancing method: class_weight='balanced'")
 print(f"Model: Multinomial Logistic Regression with L-BFGS solver")

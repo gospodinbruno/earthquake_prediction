@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+from imblearn.ensemble import BalancedRandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, roc_auc_score, roc_curve, auc, precision_recall_curve, average_precision_score, matthews_corrcoef
 
 from sklearn.preprocessing import label_binarize
@@ -67,20 +67,22 @@ print(f"Class 1: {len(y_train[y_train == 1])}")
 print(f"Class 2: {len(y_train[y_train == 2])}")
 print(f"Class 3: {len(y_train[y_train == 3])}")
 
-print("\nTraining Weighted Random Forest Classifier...")
-clf = RandomForestClassifier(
+print("\nTraining Balanced Random Forest Classifier...")
+clf = BalancedRandomForestClassifier(
     n_estimators=100, 
-    class_weight='balanced',
     random_state=42,
     max_depth=10, 
     min_samples_split=5,
-    min_samples_leaf=2
+    min_samples_leaf=2,
+    sampling_strategy='auto',
+    replacement=True,
+    n_jobs=-1
 )
 clf.fit(X_train, y_train)
 y_pred = clf.predict(X_test)
 
 
-print("\n=== Weighted Multiclass Random Forest Classification Report ===")
+print("\n=== Balanced Random Forest Classification Report ===")
 print("Classification Report (2020–2021):")
 print(classification_report(y_test, y_pred, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']))
 
@@ -112,7 +114,7 @@ sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
 plt.xlabel('Predicted')
 plt.ylabel('Actual')
-plt.title('Confusion Matrix (Weighted Multiclass Random Forest)')
+plt.title('Confusion Matrix (Balanced Random Forest)')
 plt.tight_layout()
 plt.show()
 
@@ -127,7 +129,7 @@ print(importances)
 
 plt.figure(figsize=(10, 6))
 importances.plot(kind='barh')
-plt.title('Feature Importances (Weighted Random Forest – Multiclass)')
+plt.title('Feature Importances (Balanced Random Forest – Multiclass)')
 plt.xlabel('Importance')
 plt.gca().invert_yaxis()
 plt.grid(True, axis='x')
@@ -135,11 +137,13 @@ plt.tight_layout()
 plt.show()
 
 
-print(f"\n=== Random Forest Model Parameters ===")
+print(f"\n=== Balanced Random Forest Model Parameters ===")
 print(f"Number of estimators: {clf.n_estimators}")
 print(f"Max depth: {clf.max_depth}")
 print(f"Min samples split: {clf.min_samples_split}")
 print(f"Min samples leaf: {clf.min_samples_leaf}")
+print(f"Sampling strategy: {clf.sampling_strategy}")
+print(f"Replacement: {clf.replacement}")
 
 
 # Binarize the output
@@ -166,7 +170,7 @@ for i in range(4):
 plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
 plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
-plt.title('Multiclass ROC Curves (Weighted Random Forest)')
+plt.title('Multiclass ROC Curves (Balanced Random Forest)')
 plt.legend(loc='lower right')
 plt.grid(True)
 plt.tight_layout()
@@ -187,7 +191,7 @@ for i in range(4):
 
 baseline = np.sum(y_test_bin) / len(y_test_bin)
 plt.axhline(y=baseline, color='k', linestyle='--', label='Random Classifier')
-plt.title("Multiclass Precision-Recall Curves (Weighted Random Forest)")
+plt.title("Multiclass Precision-Recall Curves (Balanced Random Forest)")
 plt.xlabel("Recall")
 plt.ylabel("Precision")
 plt.legend(loc="lower left")
@@ -202,5 +206,5 @@ print(f"Training samples (balanced): {len(X_train)}")
 print(f"Test samples: {len(X_test)}")
 print(f"Features used: {len(features)}")
 print(f"Classes: 4 (1.0-2.9, 3.0-4.9, 5.0-5.9, 6+ magnitude)")
-print(f"Balancing method: class_weight='balanced'")
-print(f"Model: Random Forest with 100 estimators")
+print(f"Balancing method: BalancedRandomForestClassifier with sampling_strategy='auto'")
+print(f"Model: Balanced Random Forest with 100 estimators")

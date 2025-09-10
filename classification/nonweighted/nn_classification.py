@@ -61,9 +61,9 @@ y_test_cat = to_categorical(y_test, num_classes=3)
 model = Sequential([
     Dense(64, activation='relu', input_shape=(X_train_scaled.shape[1],)),
     Dropout(0.3),
-    Dense(64, activation='relu')
+    Dense(64, activation='relu'),
     Dropout(0.3),
-    Dense(3, activation='softmax')  # 3 output classes
+    Dense(3, activation='softmax') 
 ])
 
 model.compile(optimizer=Adam(0.001), loss='categorical_crossentropy', metrics=['accuracy'])

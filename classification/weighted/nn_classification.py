@@ -51,15 +51,12 @@ df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
 
-df = df[df['Magnitude'] >= 1.0].copy()
-df.reset_index(drop=True, inplace=True)
-
-bins = [1.0, 3.0, 5.0, 6.0, 10]
-labels = [0, 1, 2, 3]
+bins = [0, 2, 4, 10]
+labels = [0, 1, 2]
 df['MagClass'] = pd.cut(df['Magnitude'], bins=bins, labels=labels, right=False).astype(int)
 
 
-magnitude_labels = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+']
+magnitude_labels = ['0-1.9', '2-3.9', '4+']
 df['Magnitude_Range'] = pd.cut(df['Magnitude'], bins=bins, labels=magnitude_labels, right=False)
 counts = df['Magnitude_Range'].value_counts().sort_index()
 print("Earthquake Counts by Magnitude Range:")
@@ -123,18 +120,18 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 
-y_train_cat = to_categorical(y_train, num_classes=4)
-y_test_cat = to_categorical(y_test, num_classes=4)
+y_train_cat = to_categorical(y_train, num_classes=3)
+y_test_cat = to_categorical(y_test, num_classes=3)
 
 model = Sequential([
     Dense(64, activation='relu', input_shape=(X_train_scaled.shape[1],)),
     Dropout(0.3),
     Dense(64, activation='relu'),
     Dropout(0.3),
-    Dense(4, activation='softmax') 
+    Dense(3, activation='softmax') 
 ])
 
-focal_loss_fn = focal_loss(alpha=[0.1, 0.1, 1.0, 2.0], gamma=2.0)
+focal_loss_fn = focal_loss(alpha=[0.1, 0.1, 2.0], gamma=2.0)
 
 model.compile(optimizer=Adam(0.001), loss='categorical_crossentropy', metrics=['accuracy'])
 
@@ -154,7 +151,7 @@ y_pred_prob = model.predict(X_test_scaled)
 y_pred = np.argmax(y_pred_prob, axis=1)
 
 print("\n=== Classification Report (Weighted Neural Network - Multiclass) ===")
-print(classification_report(y_test, y_pred, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+']))
+print(classification_report(y_test, y_pred, digits=3, target_names=['0-1.9', '2-3.9', '4+']))
 
 f1_macro = f1_score(y_test, y_pred, average='macro')
 f1_weighted = f1_score(y_test, y_pred, average='weighted')
@@ -164,7 +161,7 @@ print(f"Weighted F1 Score: {f1_weighted:.3f}")
 mcc_overall = matthews_corrcoef(y_test, y_pred)
 print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
 
-classes = [0, 1, 2, 3]
+classes = [0, 1, 2]
 mcc_ovr = {}
 for c in classes:
     y_true_bin = (y_test == c).astype(int)
@@ -178,8 +175,8 @@ for c, m in mcc_ovr.items():
 cm = confusion_matrix(y_test, y_pred)
 plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-            xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+'],
-            yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+'])
+            xticklabels=['0-1.9', '2-3.9', '4+'],
+            yticklabels=['0-1.9', '2-3.9', '4+'])
 plt.title("Matrica zabune (Neuronska mreža)")
 plt.xlabel("Predviđeno")
 plt.ylabel("Stvarno")
@@ -207,13 +204,13 @@ plt.tight_layout()
 plt.show()
 
 
-y_test_bin = label_binarize(y_test, classes=[0, 1, 2, 3])
+y_test_bin = label_binarize(y_test, classes=[0, 1, 2])
 fpr, tpr, roc_auc = {}, {}, {}
-colors = ['blue', 'orange', 'green', 'red']
-class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+']
+colors = ['blue', 'orange', 'green']
+class_names = ['0-1.9', '2-3.9', '4+']
 
 plt.figure(figsize=(8, 6))
-for i in range(4):
+for i in range(3):
     fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_pred_prob[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
     plt.plot(fpr[i], tpr[i], color=colors[i],
@@ -230,11 +227,11 @@ plt.show()
 
 
 precision, recall, pr_auc = {}, {}, {}
-colors = ['blue', 'orange', 'green', 'red']
-class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+']
+colors = ['blue', 'orange', 'green']
+class_names = ['0-1.9', '2-3.9', '4+']
 
 plt.figure(figsize=(8, 6))
-for i in range(4):
+for i in range(3):
     precision[i], recall[i], _ = precision_recall_curve(y_test_bin[:, i], y_pred_prob[:, i])
     pr_auc[i] = average_precision_score(y_test_bin[:, i], y_pred_prob[:, i])
     plt.plot(recall[i], precision[i], color=colors[i],
@@ -314,6 +311,6 @@ print(f"Training samples (original): {len(train_df)}")
 print(f"Training samples (balanced): {len(X_train)}")
 print(f"Test samples: {len(X_test)}")
 print(f"Features used: {len(features)}")
-print(f"Classes: 4 (1.0-2.9, 3.0-4.9, 5.0-5.9, 6.0+ magnitude)")
+print(f"Classes: 3 (0-1.9, 2-3.9, 4+ magnitude)")
 print(f"Balancing method: class weights")
-print(f"Model architecture: 64-64-4 with dropout")
+print(f"Model architecture: 64-64-3 with dropout")

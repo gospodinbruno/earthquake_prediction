@@ -17,18 +17,25 @@ df = pd.read_csv('../../earthquake_2000_2021.csv', parse_dates=['Datetime'])
 df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
-# Define bins (your 3-class setup): [0, 2), [2, 4), [4, 10)
-bins = [0, 2, 4, 10]
-class_labels = [0, 1, 2]
+# Filter out earthquakes with magnitude < 1.0
+df = df[df['Magnitude'] >= 1.0].copy()
+df.reset_index(drop=True, inplace=True)
+
+# Define bins (4-class setup): [1.0, 3.0), [3.0, 5.0), [5.0, 6.0), [6.0, 10)
+bins = [1.0, 3.0, 5.0, 6.0, 10]
+class_labels = [0, 1, 2, 3]
 df['MagClass'] = pd.cut(df['Magnitude'], bins=bins, labels=class_labels, right=False).astype(int)
 
-range_labels = ['0–1.9', '2.0–3.9', '4.0+']
+range_labels = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 df['Magnitude_Range'] = pd.cut(df['Magnitude'], bins=bins, labels=range_labels, right=False)
 
-print("Earthquake Counts by Magnitude Range:")
+print("Earthquake Counts by Magnitude Range (>= 1.0):")
 counts = df['Magnitude_Range'].value_counts().sort_index()
 for label, count in counts.items():
     print(f"{label}: {count}")
+
+print(f"\nTotal earthquakes after filtering (>= 1.0): {len(df)}")
+print(f"Magnitude range: {df['Magnitude'].min():.2f} - {df['Magnitude'].max():.2f}")
 
 # Time features (unchanged)
 df['hour_of_day'] = df['Datetime'].dt.hour
@@ -65,10 +72,11 @@ y_train = train_df['MagClass']
 X_test  = test_df[features]
 y_test  = test_df['MagClass']
 
-print("\nOriginal class distribution in training data:")
-for c in sorted(y_train.unique()):
-    print(f"Class {c}: {(y_train == c).sum()}")
-print(f"Total training samples: {len(X_train)}")
+print(f"\nOriginal class distribution in training data:")
+print(f"Class 0: {len(y_train[y_train == 0])}")
+print(f"Class 1: {len(y_train[y_train == 1])}")
+print(f"Class 2: {len(y_train[y_train == 2])}")
+print(f"Class 3: {len(y_train[y_train == 3])}")
 
 # ----------------------------
 # 3) Scaling (unchanged)
@@ -114,13 +122,13 @@ y_pred_w = classes[y_prob_w.argmax(axis=1)]
 # 6) Reports & metrics
 # ----------------------------
 print("\n=== kNN (weights='distance') — Vanilla ===")
-print(classification_report(y_test, y_pred, digits=3))
+print(classification_report(y_test, y_pred, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']))
 print("Macro F1:", f1_score(y_test, y_pred, average='macro'))
 print("Weighted F1:", f1_score(y_test, y_pred, average='weighted'))
 print("MCC:", matthews_corrcoef(y_test, y_pred))
 
 print("\n=== kNN + Prior-Corrected Probs (√-dampened) ===")
-print(classification_report(y_test, y_pred_w, digits=3))
+print(classification_report(y_test, y_pred_w, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']))
 print("Macro F1 (weighted probs):", f1_score(y_test, y_pred_w, average='macro'))
 print("Weighted F1 (weighted probs):", f1_score(y_test, y_pred_w, average='weighted'))
 print("MCC (weighted probs):", matthews_corrcoef(y_test, y_pred_w))
@@ -132,15 +140,15 @@ cm_w = confusion_matrix(y_test, y_pred_w, labels=classes)
 plt.figure(figsize=(11,4))
 plt.subplot(1,2,1)
 sns.heatmap(cm_v, annot=True, fmt='d', cmap='Blues',
-            xticklabels=[f'{c}' for c in classes],
-            yticklabels=[f'{c}' for c in classes])
+            xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'],
+            yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
 plt.title("Confusion Matrix — Vanilla kNN")
 plt.xlabel("Predicted"); plt.ylabel("Actual")
 
 plt.subplot(1,2,2)
 sns.heatmap(cm_w, annot=True, fmt='d', cmap='Greens',
-            xticklabels=[f'{c}' for c in classes],
-            yticklabels=[f'{c}' for c in classes])
+            xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'],
+            yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
 plt.title("Confusion Matrix — Prior-Corrected (√)")
 plt.xlabel("Predicted"); plt.ylabel("Actual")
 plt.tight_layout()
@@ -153,14 +161,16 @@ y_test_bin = label_binarize(y_test, classes=classes)
 fpr, tpr, roc_auc = {}, {}, {}
 colors = ['blue', 'orange', 'green']
 
-plt.figure(figsize=(7, 5))
+plt.figure(figsize=(10, 8))
+colors = ['blue', 'orange', 'green', 'red']
+class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 for i, c in enumerate(classes):
     fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_prob_w[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
     plt.plot(fpr[i], tpr[i], color=colors[i % len(colors)],
-             label=f'Class {c} ROC (AUC = {roc_auc[i]:.2f})')
+             label=f'Class {class_names[i]} ROC (AUC = {roc_auc[i]:.2f})')
 
-plt.plot([0, 1], [0, 1], 'k--')
+plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
 plt.title("Multiclass ROC (kNN, Prior-Corrected Probs)")
 plt.xlabel("False Positive Rate")
 plt.ylabel("True Positive Rate")

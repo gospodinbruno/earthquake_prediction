@@ -1,17 +1,20 @@
 import pandas as pd
 import numpy as np
-from imblearn.ensemble import BalancedRandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix, f1_score, roc_auc_score, roc_curve, auc, precision_recall_curve, average_precision_score, matthews_corrcoef
-
-from sklearn.preprocessing import label_binarize
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    classification_report, confusion_matrix, f1_score,
+    roc_curve, auc, precision_recall_curve, average_precision_score, matthews_corrcoef
+)
+from sklearn.preprocessing import label_binarize, StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import timedelta
 
-
+# Load and sort data
 df = pd.read_csv('../../earthquake_2000_2021.csv', parse_dates=['Datetime'])
 df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
+
 
 # Filter out earthquakes with magnitude < 1.0
 df = df[df['Magnitude'] >= 1.0].copy()
@@ -24,15 +27,14 @@ df['MagClass'] = pd.cut(df['Magnitude'], bins=bins, labels=labels, right=False).
 
 magnitude_labels = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 df['Magnitude_Range'] = pd.cut(df['Magnitude'], bins=bins, labels=magnitude_labels, right=False)
-
 counts = df['Magnitude_Range'].value_counts().sort_index()
-
 print("Earthquake Counts by Magnitude Range (>= 1.0):")
 for label, count in counts.items():
     print(f"{label}: {count}")
 
 print(f"\nTotal earthquakes after filtering (>= 1.0): {len(df)}")
 print(f"Magnitude range: {df['Magnitude'].min():.2f} - {df['Magnitude'].max():.2f}")
+
 
 df['hour_of_day'] = df['Datetime'].dt.hour
 df['day_of_week'] = df['Datetime'].dt.dayofweek
@@ -47,54 +49,90 @@ for i in range(len(df)):
     eq_counts.append(count)
 df['eq_count_last_24h'] = eq_counts
 
+
 features = ['Latitude', 'Longitude', 'Depth', 'hour_of_day', 'day_of_week',
             'time_since_last_eq', 'eq_count_last_24h']
 X = df[features]
 y = df['MagClass']
 
-cutoff = pd.Timestamp("2017-01-01")
-train_df = df[df['Datetime'] < cutoff].copy()
-test_df = df[df['Datetime'] >= cutoff].copy()
+
+train_start = pd.Timestamp("2000-01-01")
+train_end = pd.Timestamp("2017-01-01")
+train_df = df[(df['Datetime'] >= train_start) & (df['Datetime'] < train_end)].copy()
+test_df = df[df['Datetime'] >= train_end].copy()
 
 X_train = train_df[features]
 y_train = train_df['MagClass']
 X_test = test_df[features]
 y_test = test_df['MagClass']
 
-print(f"\nOriginal class distribution in training data:")
-print(f"Class 0: {len(y_train[y_train == 0])}")
-print(f"Class 1: {len(y_train[y_train == 1])}")
-print(f"Class 2: {len(y_train[y_train == 2])}")
-print(f"Class 3: {len(y_train[y_train == 3])}")
+print(f"\nClass distribution in training data:")
+unique, counts = np.unique(y_train, return_counts=True)
+for class_label, count in zip(unique, counts):
+    print(f"Class {class_label}: {count}")
+print(f"Total training samples: {len(X_train)}")
 
-print("\nTraining Balanced Random Forest Classifier...")
-clf = BalancedRandomForestClassifier(
-    n_estimators=100, 
-    random_state=42,
-    max_depth=10, 
-    min_samples_split=5,
-    min_samples_leaf=2,
-    sampling_strategy='auto',
-    replacement=True,
-    n_jobs=-1
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+
+print("\nTraining Weighted Logistic Regression Classifier...")
+clf = LogisticRegression(
+    multi_class='multinomial',
+    solver='lbfgs',
+    max_iter=1000,
+    class_weight='balanced',
+    random_state=42
 )
-clf.fit(X_train, y_train)
-y_pred = clf.predict(X_test)
+clf.fit(X_train_scaled, y_train)
+y_pred = clf.predict(X_test_scaled)
+y_prob = clf.predict_proba(X_test_scaled)
 
 
-print("\n=== Balanced Random Forest Classification Report ===")
-print("Classification Report (2020–2021):")
+coef_df = pd.DataFrame(clf.coef_, columns=features)
+coef_df['Class'] = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
+coef_df.set_index('Class', inplace=True)
+print("\n=== Logistic Regression Coefficients (per class) ===")
+print(coef_df.T)
+
+
+coef_df.T.plot(kind='bar', figsize=(10, 6))
+plt.title("Logistic Regression Coefficients by Feature and Class (Weighted)")
+plt.ylabel("Coefficient Value")
+plt.xlabel("Feature")
+plt.grid(True)
+plt.tight_layout()
+plt.legend(title="Magnitude Class")
+plt.show()
+
+# Feature importance using coefficient magnitudes (average across classes)
+feature_importance = np.abs(coef_df).mean(axis=0).sort_values(ascending=False)
+print("\nFeature Importances (Average Absolute Coefficients):")
+print(feature_importance)
+
+plt.figure(figsize=(10, 6))
+feature_importance.plot(kind='barh')
+plt.title('Feature Importances (Weighted Logistic Regression)')
+plt.xlabel('Importance')
+plt.gca().invert_yaxis()
+plt.grid(True, axis='x')
+plt.tight_layout()
+plt.show()
+
+
+print("\n=== Weighted Multiclass Logistic Regression Classification Report ===")
 print(classification_report(y_test, y_pred, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']))
 
 f1_macro = f1_score(y_test, y_pred, average='macro')
 f1_weighted = f1_score(y_test, y_pred, average='weighted')
 print(f"Macro F1 Score:    {f1_macro:.3f}")
-print(f"Weighted F1 Score: {f1_weighted:.3f}") 
+print(f"Weighted F1 Score: {f1_weighted:.3f}")
 
 # ===== MCC (multiclass) =====
 mcc_overall = matthews_corrcoef(y_test, y_pred)
 print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
-
 
 classes = [0, 1, 2, 3]
 mcc_ovr = {}
@@ -108,70 +146,42 @@ for c, m in mcc_ovr.items():
 
 
 cm = confusion_matrix(y_test, y_pred)
-plt.figure(figsize=(10, 8))
+plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'],
             yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
-plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.title('Confusion Matrix (Balanced Random Forest)')
+plt.title("Confusion Matrix (Weighted Multiclass Logistic Regression)")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
 plt.tight_layout()
 plt.show()
 
 
-f1_macro = f1_score(y_test, y_pred, average='macro')
-print(f"Macro F1 Score: {f1_macro:.3f}")
+print(f"\n=== Logistic Regression Model Parameters ===")
+print(f"Multi-class strategy: {clf.multi_class}")
+print(f"Solver: {clf.solver}")
+print(f"Max iterations: {clf.max_iter}")
+print(f"Training samples (original): {len(train_df)}")
+print(f"Training samples (balanced): {len(X_train)}")
 
 
-importances = pd.Series(clf.feature_importances_, index=features).sort_values(ascending=False)
-print("\nFeature Importances:")
-print(importances)
-
-plt.figure(figsize=(10, 6))
-importances.plot(kind='barh')
-plt.title('Feature Importances (Balanced Random Forest – Multiclass)')
-plt.xlabel('Importance')
-plt.gca().invert_yaxis()
-plt.grid(True, axis='x')
-plt.tight_layout()
-plt.show()
-
-
-print(f"\n=== Balanced Random Forest Model Parameters ===")
-print(f"Number of estimators: {clf.n_estimators}")
-print(f"Max depth: {clf.max_depth}")
-print(f"Min samples split: {clf.min_samples_split}")
-print(f"Min samples leaf: {clf.min_samples_leaf}")
-print(f"Sampling strategy: {clf.sampling_strategy}")
-print(f"Replacement: {clf.replacement}")
-
-
-# Binarize the output
-classes = [0, 1, 2, 3]
-y_test_bin = label_binarize(y_test, classes=classes)
-y_score = clf.predict_proba(X_test)
-
-
-fpr = dict()
-tpr = dict()
-roc_auc = dict()
-
-for i in range(4):
-    fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
-    roc_auc[i] = auc(fpr[i], tpr[i])
-
-
-plt.figure(figsize=(10, 8))
+y_test_bin = label_binarize(y_test, classes=[0, 1, 2, 3])
+fpr, tpr, roc_auc = {}, {}, {}
 colors = ['blue', 'orange', 'green', 'red']
 class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
+
+plt.figure(figsize=(10, 8))
 for i in range(4):
+    fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_prob[:, i])
+    roc_auc[i] = auc(fpr[i], tpr[i])
     plt.plot(fpr[i], tpr[i], color=colors[i],
              label=f'Class {class_names[i]} ROC curve (AUC = {roc_auc[i]:.2f})')
+
 plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Multiclass ROC Curves (Balanced Random Forest)')
-plt.legend(loc='lower right')
+plt.title("Multiclass ROC Curves (Weighted Logistic Regression)")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.legend(loc="lower right")
 plt.grid(True)
 plt.tight_layout()
 plt.show()
@@ -183,15 +193,15 @@ class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 
 plt.figure(figsize=(10, 8))
 for i in range(4):
-    precision[i], recall[i], _ = precision_recall_curve(y_test_bin[:, i], y_score[:, i])
-    pr_auc[i] = average_precision_score(y_test_bin[:, i], y_score[:, i])
+    precision[i], recall[i], _ = precision_recall_curve(y_test_bin[:, i], y_prob[:, i])
+    pr_auc[i] = average_precision_score(y_test_bin[:, i], y_prob[:, i])
     plt.plot(recall[i], precision[i], color=colors[i],
              label=f'Class {class_names[i]} PR curve (AP = {pr_auc[i]:.2f})')
 
 
 baseline = np.sum(y_test_bin) / len(y_test_bin)
 plt.axhline(y=baseline, color='k', linestyle='--', label='Random Classifier')
-plt.title("Multiclass Precision-Recall Curves (Balanced Random Forest)")
+plt.title("Multiclass Precision-Recall Curves (Weighted Logistic Regression)")
 plt.xlabel("Recall")
 plt.ylabel("Precision")
 plt.legend(loc="lower left")
@@ -206,5 +216,5 @@ print(f"Training samples (balanced): {len(X_train)}")
 print(f"Test samples: {len(X_test)}")
 print(f"Features used: {len(features)}")
 print(f"Classes: 4 (1.0-2.9, 3.0-4.9, 5.0-5.9, 6+ magnitude)")
-print(f"Balancing method: BalancedRandomForestClassifier with sampling_strategy='auto'")
-print(f"Model: Balanced Random Forest with 100 estimators")
+print(f"Balancing method: class_weight='balanced'")
+print(f"Model: Multinomial Logistic Regression with L-BFGS solver")

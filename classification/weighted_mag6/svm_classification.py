@@ -17,17 +17,24 @@ df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
 
-bins = [0, 2, 4, 10]
-labels = [0, 1, 2]
+# Filter out earthquakes with magnitude < 1.0
+df = df[df['Magnitude'] >= 1.0].copy()
+df.reset_index(drop=True, inplace=True)
+
+bins = [1.0, 3.0, 5.0, 6.0, 10]
+labels = [0, 1, 2, 3]
 df['MagClass'] = pd.cut(df['Magnitude'], bins=bins, labels=labels, right=False).astype(int)
 
 
-magnitude_labels = ['0–1.9', '2.0–3.9', '4.0+']
+magnitude_labels = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 df['Magnitude_Range'] = pd.cut(df['Magnitude'], bins=bins, labels=magnitude_labels, right=False)
 counts = df['Magnitude_Range'].value_counts().sort_index()
-print("Earthquake Counts by Magnitude Range:")
+print("Earthquake Counts by Magnitude Range (>= 1.0):")
 for label, count in counts.items():
     print(f"{label}: {count}")
+
+print(f"\nTotal earthquakes after filtering (>= 1.0): {len(df)}")
+print(f"Magnitude range: {df['Magnitude'].min():.2f} - {df['Magnitude'].max():.2f}")
 
 
 df['hour_of_day'] = df['Datetime'].dt.hour
@@ -88,7 +95,7 @@ y_prob = clf.predict_proba(X_test_scaled)
 
 
 print("\n=== Weighted Multiclass SVM Classification Report ===")
-print(classification_report(y_test, y_pred, digits=3, target_names=['0–1.9', '2–3.9', '4+']))
+print(classification_report(y_test, y_pred, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']))
 
 f1_macro = f1_score(y_test, y_pred, average='macro')
 f1_weighted = f1_score(y_test, y_pred, average='weighted')
@@ -99,7 +106,7 @@ print(f"Weighted F1 Score: {f1_weighted:.3f}")
 mcc_overall = matthews_corrcoef(y_test, y_pred)
 print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
 
-classes = [0, 1, 2]
+classes = [0, 1, 2, 3]
 mcc_ovr = {}
 for c in classes:
     y_true_bin = (y_test == c).astype(int)
@@ -113,8 +120,8 @@ for c, m in mcc_ovr.items():
 cm = confusion_matrix(y_test, y_pred)
 plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-            xticklabels=['0–1.9', '2–3.9', '4+'],
-            yticklabels=['0–1.9', '2–3.9', '4+'])
+            xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'],
+            yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
 plt.title("Confusion Matrix (Weighted Multiclass SVM)")
 plt.xlabel("Predicted")
 plt.ylabel("Actual")
@@ -132,13 +139,13 @@ print(f"Training samples after balancing: {len(X_train)}")
 
 
 
-y_test_bin = label_binarize(y_test, classes=[0, 1, 2])
+y_test_bin = label_binarize(y_test, classes=[0, 1, 2, 3])
 fpr, tpr, roc_auc = {}, {}, {}
-colors = ['blue', 'orange', 'green']
-class_names = ['0–1.9', '2–3.9', '4+']
+colors = ['blue', 'orange', 'green', 'red']
+class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 
-plt.figure(figsize=(8, 6))
-for i in range(3):
+plt.figure(figsize=(10, 8))
+for i in range(4):
     fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_prob[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
     plt.plot(fpr[i], tpr[i], color=colors[i],
@@ -153,31 +160,13 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# Feature importance using permutation importance
-print("\nCalculating feature importance using permutation importance...")
-perm_importance = permutation_importance(clf, X_test_scaled, y_test, n_repeats=10, random_state=42)
-feature_importance = pd.Series(perm_importance.importances_mean, index=features).sort_values(ascending=False)
-print("\nFeature Importances (Permutation Importance):")
-print(feature_importance)
-
-plt.figure(figsize=(10, 6))
-feature_importance.plot(kind='barh')
-plt.title('Feature Importances (Weighted SVM)')
-plt.xlabel('Permutation Importance')
-plt.gca().invert_yaxis()
-plt.grid(True, axis='x')
-plt.tight_layout()
-plt.show()
-
-
-
 
 precision, recall, pr_auc = {}, {}, {}
-colors = ['blue', 'orange', 'green']
-class_names = ['0–1.9', '2–3.9', '4+']
+colors = ['blue', 'orange', 'green', 'red']
+class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 
-plt.figure(figsize=(8, 6))
-for i in range(3):
+plt.figure(figsize=(10, 8))
+for i in range(4):
     precision[i], recall[i], _ = precision_recall_curve(y_test_bin[:, i], y_prob[:, i])
     pr_auc[i] = average_precision_score(y_test_bin[:, i], y_prob[:, i])
     plt.plot(recall[i], precision[i], color=colors[i],
@@ -202,5 +191,5 @@ print(f"Training samples (original): {len(train_df)}")
 print(f"Training samples (balanced): {len(X_train)}")
 print(f"Test samples: {len(X_test)}")
 print(f"Features used: {len(features)}")
-print(f"Classes: 3 (0–1.9, 2–3.9, 4+ magnitude)")
+print(f"Classes: 4 (1.0-2.9, 3.0-4.9, 5.0-5.9, 6+ magnitude)")
 print(f"Balancing method: class_weight='balanced'")

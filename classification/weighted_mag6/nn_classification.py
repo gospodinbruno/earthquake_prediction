@@ -67,12 +67,15 @@ labels = [0, 1, 2, 3]
 df['MagClass'] = pd.cut(df['Magnitude'], bins=bins, labels=labels, right=False).astype(int)
 
 
-magnitude_labels = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+']
+magnitude_labels = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 df['Magnitude_Range'] = pd.cut(df['Magnitude'], bins=bins, labels=magnitude_labels, right=False)
 counts = df['Magnitude_Range'].value_counts().sort_index()
-print("Earthquake Counts by Magnitude Range:")
+print("Earthquake Counts by Magnitude Range (>= 1.0):")
 for label, count in counts.items():
     print(f"{label}: {count}")
+
+print(f"\nTotal earthquakes after filtering (>= 1.0): {len(df)}")
+print(f"Magnitude range: {df['Magnitude'].min():.2f} - {df['Magnitude'].max():.2f}")
 
 
 df['hour_of_day'] = df['Datetime'].dt.hour
@@ -110,6 +113,7 @@ print(f"\nOriginal class distribution in training data:")
 print(f"Class 0: {len(train_df[train_df['MagClass'] == 0])}")
 print(f"Class 1: {len(train_df[train_df['MagClass'] == 1])}")
 print(f"Class 2: {len(train_df[train_df['MagClass'] == 2])}")
+print(f"Class 3: {len(train_df[train_df['MagClass'] == 3])}")
 print(f"Original balanced weights: {original_class_weights}")
 print(f"Conservative weights (sqrt): {class_weight_dict}")
 
@@ -165,7 +169,7 @@ y_pred_prob = model.predict(X_test_scaled)
 y_pred = np.argmax(y_pred_prob, axis=1)
 
 print("\n=== Classification Report (Weighted Neural Network - Multiclass) ===")
-print(classification_report(y_test, y_pred, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+']))
+print(classification_report(y_test, y_pred, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']))
 
 f1_macro = f1_score(y_test, y_pred, average='macro')
 f1_weighted = f1_score(y_test, y_pred, average='weighted')
@@ -190,8 +194,8 @@ for c, m in mcc_ovr.items():
 cm = confusion_matrix(y_test, y_pred)
 plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-            xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+'],
-            yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+'])
+            xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'],
+            yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
 plt.title("Confusion Matrix (Weighted Neural Network)")
 plt.xlabel("Predicted")
 plt.ylabel("Actual")
@@ -222,7 +226,7 @@ plt.show()
 y_test_bin = label_binarize(y_test, classes=[0, 1, 2, 3])
 fpr, tpr, roc_auc = {}, {}, {}
 colors = ['blue', 'orange', 'green', 'red']
-class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+']
+class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 
 plt.figure(figsize=(8, 6))
 for i in range(4):
@@ -243,7 +247,7 @@ plt.show()
 
 precision, recall, pr_auc = {}, {}, {}
 colors = ['blue', 'orange', 'green', 'red']
-class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+']
+class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 
 plt.figure(figsize=(8, 6))
 for i in range(4):
@@ -269,6 +273,6 @@ print(f"Training samples (original): {len(train_df)}")
 print(f"Training samples (balanced): {len(X_train)}")
 print(f"Test samples: {len(X_test)}")
 print(f"Features used: {len(features)}")
-print(f"Classes: 4 (1.0-2.9, 3.0-4.9, 5.0-5.9, 6.0+ magnitude)")
+print(f"Classes: 4 (1.0-2.9, 3.0-4.9, 5.0-5.9, 6+ magnitude)")
 print(f"Balancing method: class weights")
 print(f"Model architecture: 64-64-4 with dropout")

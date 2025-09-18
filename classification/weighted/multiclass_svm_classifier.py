@@ -95,7 +95,6 @@ f1_weighted = f1_score(y_test, y_pred, average='weighted')
 print(f"Macro F1 Score:    {f1_macro:.3f}")
 print(f"Weighted F1 Score: {f1_weighted:.3f}")
 
-# ===== MCC (multiclass) =====
 mcc_overall = matthews_corrcoef(y_test, y_pred)
 print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
 
@@ -115,9 +114,9 @@ plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=['0–1.9', '2–3.9', '4+'],
             yticklabels=['0–1.9', '2–3.9', '4+'])
-plt.title("Confusion Matrix (Weighted Multiclass SVM)")
-plt.xlabel("Predicted")
-plt.ylabel("Actual")
+plt.title("Matrica zabune (SVM)")
+plt.xlabel("Predviđeno")
+plt.ylabel("Stvarno")
 plt.tight_layout()
 plt.show()
 
@@ -142,18 +141,17 @@ for i in range(3):
     fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_prob[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
     plt.plot(fpr[i], tpr[i], color=colors[i],
-             label=f'Class {class_names[i]} ROC curve (AUC = {roc_auc[i]:.2f})')
+             label=f'Klasa {class_names[i]} ROC krivulje (AUC = {roc_auc[i]:.2f})')
 
-plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
-plt.title("Multiclass ROC Curves (Weighted SVM)")
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
+plt.plot([0, 1], [0, 1], 'k--', label='Slučajni Klasifikator')
+plt.title("ROC krivulje za SVM model")
+plt.xlabel("Lažno pozitivna stopa")
+plt.ylabel("Istinsko pozitivna stopa")
 plt.legend(loc="lower right")
 plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# Feature importance using permutation importance
 print("\nCalculating feature importance using permutation importance...")
 perm_importance = permutation_importance(clf, X_test_scaled, y_test, n_repeats=10, random_state=42)
 feature_importance = pd.Series(perm_importance.importances_mean, index=features).sort_values(ascending=False)
@@ -162,8 +160,8 @@ print(feature_importance)
 
 plt.figure(figsize=(10, 6))
 feature_importance.plot(kind='barh')
-plt.title('Feature Importances (Weighted SVM)')
-plt.xlabel('Permutation Importance')
+plt.title('Važnost značajki (SVM)')
+plt.xlabel('Važnost permutacije')
 plt.gca().invert_yaxis()
 plt.grid(True, axis='x')
 plt.tight_layout()
@@ -186,9 +184,9 @@ for i in range(3):
 
 baseline = np.sum(y_test_bin) / len(y_test_bin)
 plt.axhline(y=baseline, color='k', linestyle='--', label='Random Classifier')
-plt.title("Multiclass Precision-Recall Curves (Weighted SVM)")
-plt.xlabel("Recall")
-plt.ylabel("Precision")
+plt.title("Višeklasne krivulje preciznosti i osjetljivosti (Ponderirani SVM)")
+plt.xlabel("Osjetljivost")
+plt.ylabel("Preciznost")
 plt.legend(loc="lower left")
 plt.grid(True)
 plt.tight_layout()

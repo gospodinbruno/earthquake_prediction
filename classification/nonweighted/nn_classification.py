@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, roc_curve, auc
 from sklearn.preprocessing import StandardScaler, label_binarize
+from sklearn.inspection import permutation_importance
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.utils import to_categorical
@@ -109,4 +110,57 @@ plt.ylabel("True Positive Rate")
 plt.legend(loc="lower right")
 plt.grid(True)
 plt.tight_layout()
+plt.show()
+
+# ===== Permutation Importance =====
+print("\n=== Permutation Importance Analysis ===")
+
+# Create a wrapper function for the Keras model to work with sklearn's permutation_importance
+def model_predict_wrapper(X):
+    """Wrapper function to make Keras model compatible with sklearn's permutation_importance"""
+    predictions = model.predict(X, verbose=0)
+    return np.argmax(predictions, axis=1)
+
+# Calculate permutation importance
+print("Calculating permutation importance...")
+perm_importance = permutation_importance(
+    model_predict_wrapper, 
+    X_test_scaled, 
+    y_test, 
+    n_repeats=10, 
+    random_state=42,
+    scoring='f1_macro'
+)
+
+# Get feature names
+feature_names = features
+
+# Create importance DataFrame
+importance_df = pd.DataFrame({
+    'feature': feature_names,
+    'importance_mean': perm_importance.importances_mean,
+    'importance_std': perm_importance.importances_std
+}).sort_values('importance_mean', ascending=False)
+
+print("\nPermutation Importance Results (F1 Macro Score):")
+print("=" * 50)
+for idx, row in importance_df.iterrows():
+    print(f"{row['feature']:20s}: {row['importance_mean']:.4f} ± {row['importance_std']:.4f}")
+
+# Visualize permutation importance
+plt.figure(figsize=(10, 6))
+bars = plt.bar(range(len(importance_df)), importance_df['importance_mean'], 
+               yerr=importance_df['importance_std'], capsize=5, alpha=0.7)
+plt.xlabel('Features')
+plt.ylabel('Permutation Importance (F1 Macro Score)')
+plt.title('Feature Importance - Neural Network Classification')
+plt.xticks(range(len(importance_df)), importance_df['feature'], rotation=45, ha='right')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+
+# Add value labels on bars
+for i, (bar, mean_val, std_val) in enumerate(zip(bars, importance_df['importance_mean'], importance_df['importance_std'])):
+    plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + std_val + 0.001, 
+             f'{mean_val:.3f}', ha='center', va='bottom', fontsize=9)
+
 plt.show()

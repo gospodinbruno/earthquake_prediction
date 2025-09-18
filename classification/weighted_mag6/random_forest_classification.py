@@ -13,7 +13,6 @@ df = pd.read_csv('../../earthquake_2000_2021.csv', parse_dates=['Datetime'])
 df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
-# Filter out earthquakes with magnitude < 1.0
 df = df[df['Magnitude'] >= 1.0].copy()
 df.reset_index(drop=True, inplace=True)
 
@@ -89,7 +88,6 @@ f1_weighted = f1_score(y_test, y_pred, average='weighted')
 print(f"Macro F1 Score:    {f1_macro:.3f}")
 print(f"Weighted F1 Score: {f1_weighted:.3f}") 
 
-# ===== MCC (multiclass) =====
 mcc_overall = matthews_corrcoef(y_test, y_pred)
 print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
 
@@ -110,9 +108,9 @@ plt.figure(figsize=(10, 8))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'],
             yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
-plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.title('Confusion Matrix (Weighted Multiclass Random Forest)')
+plt.xlabel('Predviđeno')
+plt.ylabel('Stvarno')
+plt.title('Matrica zabune (Slučajna šuma)')
 plt.tight_layout()
 plt.show()
 
@@ -127,8 +125,8 @@ print(importances)
 
 plt.figure(figsize=(10, 6))
 importances.plot(kind='barh')
-plt.title('Feature Importances (Weighted Random Forest – Multiclass)')
-plt.xlabel('Importance')
+plt.title('Važnost značajki')
+plt.xlabel('Važnost')
 plt.gca().invert_yaxis()
 plt.grid(True, axis='x')
 plt.tight_layout()
@@ -142,7 +140,6 @@ print(f"Min samples split: {clf.min_samples_split}")
 print(f"Min samples leaf: {clf.min_samples_leaf}")
 
 
-# Binarize the output
 classes = [0, 1, 2, 3]
 y_test_bin = label_binarize(y_test, classes=classes)
 y_score = clf.predict_proba(X_test)
@@ -162,11 +159,11 @@ colors = ['blue', 'orange', 'green', 'red']
 class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
 for i in range(4):
     plt.plot(fpr[i], tpr[i], color=colors[i],
-             label=f'Class {class_names[i]} ROC curve (AUC = {roc_auc[i]:.2f})')
+             label=f'Klasa {class_names[i]} ROC krivulja (AUC = {roc_auc[i]:.2f})')
 plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Multiclass ROC Curves (Weighted Random Forest)')
+plt.xlabel('Stopa lažno pozitivnih')
+plt.ylabel('Stopa istinsko pozitivnih')
+plt.title('ROC krivulje (Slučajna šuma)')
 plt.legend(loc='lower right')
 plt.grid(True)
 plt.tight_layout()

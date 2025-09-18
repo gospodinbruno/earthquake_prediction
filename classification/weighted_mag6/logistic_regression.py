@@ -10,13 +10,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import timedelta
 
-# Load and sort data
 df = pd.read_csv('../../earthquake_2000_2021.csv', parse_dates=['Datetime'])
 df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
 
-# Filter out earthquakes with magnitude < 1.0
 df = df[df['Magnitude'] >= 1.0].copy()
 df.reset_index(drop=True, inplace=True)
 
@@ -107,7 +105,6 @@ plt.tight_layout()
 plt.legend(title="Magnitude Class")
 plt.show()
 
-# Feature importance using coefficient magnitudes (average across classes)
 feature_importance = np.abs(coef_df).mean(axis=0).sort_values(ascending=False)
 print("\nFeature Importances (Average Absolute Coefficients):")
 print(feature_importance)
@@ -130,7 +127,6 @@ f1_weighted = f1_score(y_test, y_pred, average='weighted')
 print(f"Macro F1 Score:    {f1_macro:.3f}")
 print(f"Weighted F1 Score: {f1_weighted:.3f}")
 
-# ===== MCC (multiclass) =====
 mcc_overall = matthews_corrcoef(y_test, y_pred)
 print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
 
@@ -150,9 +146,9 @@ plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'],
             yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
-plt.title("Confusion Matrix (Weighted Multiclass Logistic Regression)")
-plt.xlabel("Predicted")
-plt.ylabel("Actual")
+plt.title("Matrica zabune logističke regresije)")
+plt.xlabel("Predviđeno")
+plt.ylabel("Stvarno")
 plt.tight_layout()
 plt.show()
 
@@ -175,12 +171,12 @@ for i in range(4):
     fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_prob[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
     plt.plot(fpr[i], tpr[i], color=colors[i],
-             label=f'Class {class_names[i]} ROC curve (AUC = {roc_auc[i]:.2f})')
+             label=f'Klasa {class_names[i]} ROC krivulja (AUC = {roc_auc[i]:.2f})')
 
-plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
-plt.title("Multiclass ROC Curves (Weighted Logistic Regression)")
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
+plt.plot([0, 1], [0, 1], 'k--', label='Slučajni klasifikator')
+plt.title("ROC krivulje logističke regresije)")
+plt.xlabel("Stopa lažno pozitivnih")
+plt.ylabel("Stopa istinsko pozitivnih")
 plt.legend(loc="lower right")
 plt.grid(True)
 plt.tight_layout()

@@ -13,25 +13,21 @@ df = pd.read_csv('../../earthquake_2000_2021.csv', parse_dates=['Datetime'])
 df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
-# Filter out earthquakes with magnitude < 1.0
-df = df[df['Magnitude'] >= 1.0].copy()
-df.reset_index(drop=True, inplace=True)
-
-bins = [1.0, 3.0, 5.0, 6.0, 10]
-labels = [0, 1, 2, 3]
+bins = [0, 2, 4, 10]
+labels = [0, 1, 2]
 df['MagClass'] = pd.cut(df['Magnitude'], bins=bins, labels=labels, right=False).astype(int)
 
 
-magnitude_labels = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
+magnitude_labels = ['0–1.9', '2.0–3.9', '4.0+']
 df['Magnitude_Range'] = pd.cut(df['Magnitude'], bins=bins, labels=magnitude_labels, right=False)
 
 counts = df['Magnitude_Range'].value_counts().sort_index()
 
-print("Earthquake Counts by Magnitude Range (>= 1.0):")
+print("Earthquake Counts by Magnitude Range:")
 for label, count in counts.items():
     print(f"{label}: {count}")
 
-print(f"\nTotal earthquakes after filtering (>= 1.0): {len(df)}")
+print(f"\nTotal earthquakes: {len(df)}")
 print(f"Magnitude range: {df['Magnitude'].min():.2f} - {df['Magnitude'].max():.2f}")
 
 df['hour_of_day'] = df['Datetime'].dt.hour
@@ -61,11 +57,11 @@ y_train = train_df['MagClass']
 X_test = test_df[features]
 y_test = test_df['MagClass']
 
-print(f"\nOriginal class distribution in training data:")
-print(f"Class 0: {len(y_train[y_train == 0])}")
-print(f"Class 1: {len(y_train[y_train == 1])}")
-print(f"Class 2: {len(y_train[y_train == 2])}")
-print(f"Class 3: {len(y_train[y_train == 3])}")
+print(f"\nClass distribution in training data:")
+unique, counts = np.unique(y_train, return_counts=True)
+for class_label, count in zip(unique, counts):
+    print(f"Class {class_label}: {count}")
+print(f"Total training samples: {len(X_train)}")
 
 print("\nTraining Weighted Random Forest Classifier...")
 clf = RandomForestClassifier(
@@ -81,20 +77,18 @@ y_pred = clf.predict(X_test)
 
 
 print("\n=== Weighted Multiclass Random Forest Classification Report ===")
-print("Classification Report (2020–2021):")
-print(classification_report(y_test, y_pred, digits=3, target_names=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']))
+print(classification_report(y_test, y_pred, digits=3, target_names=['0–1.9', '2–3.9', '4+']))
 
 f1_macro = f1_score(y_test, y_pred, average='macro')
 f1_weighted = f1_score(y_test, y_pred, average='weighted')
 print(f"Macro F1 Score:    {f1_macro:.3f}")
 print(f"Weighted F1 Score: {f1_weighted:.3f}") 
 
-# ===== MCC (multiclass) =====
 mcc_overall = matthews_corrcoef(y_test, y_pred)
 print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
 
 
-classes = [0, 1, 2, 3]
+classes = [0, 1, 2]
 mcc_ovr = {}
 for c in classes:
     y_true_bin = (y_test == c).astype(int)
@@ -106,13 +100,13 @@ for c, m in mcc_ovr.items():
 
 
 cm = confusion_matrix(y_test, y_pred)
-plt.figure(figsize=(10, 8))
+plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-            xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'],
-            yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+'])
-plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.title('Confusion Matrix (Weighted Multiclass Random Forest)')
+            xticklabels=['0–1.9', '2–3.9', '4+'],
+            yticklabels=['0–1.9', '2–3.9', '4+'])
+plt.xlabel('Predviđeno')
+plt.ylabel('Stvarno')
+plt.title('Matrica zabune (Slučajna šuma)')
 plt.tight_layout()
 plt.show()
 
@@ -125,10 +119,23 @@ importances = pd.Series(clf.feature_importances_, index=features).sort_values(as
 print("\nFeature Importances:")
 print(importances)
 
+croatian_features = {
+    'Latitude': 'Geografska širina',
+    'Longitude': 'Geografska dužina', 
+    'Depth': 'Dubina',
+    'hour_of_day': 'Sat u danu',
+    'day_of_week': 'Dan u tjednu',
+    'time_since_last_eq': 'Vrijeme od zadnjeg potresa',
+    'eq_count_last_24h': 'Broj potresa u zadnja 24h'
+}
+
+importances_croatian = importances.copy()
+importances_croatian.index = [croatian_features[feature] for feature in importances_croatian.index]
+
 plt.figure(figsize=(10, 6))
-importances.plot(kind='barh')
-plt.title('Feature Importances (Weighted Random Forest – Multiclass)')
-plt.xlabel('Importance')
+importances_croatian.plot(kind='barh')
+plt.title('Važnost značajki (Slučajna šuma)')
+plt.xlabel('Koeficijent važnosti')
 plt.gca().invert_yaxis()
 plt.grid(True, axis='x')
 plt.tight_layout()
@@ -142,8 +149,7 @@ print(f"Min samples split: {clf.min_samples_split}")
 print(f"Min samples leaf: {clf.min_samples_leaf}")
 
 
-# Binarize the output
-classes = [0, 1, 2, 3]
+classes = [0, 1, 2]
 y_test_bin = label_binarize(y_test, classes=classes)
 y_score = clf.predict_proba(X_test)
 
@@ -152,21 +158,21 @@ fpr = dict()
 tpr = dict()
 roc_auc = dict()
 
-for i in range(4):
+for i in range(3):
     fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
 
 
-plt.figure(figsize=(10, 8))
-colors = ['blue', 'orange', 'green', 'red']
-class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
-for i in range(4):
+plt.figure(figsize=(8, 6))
+colors = ['blue', 'orange', 'green']
+class_names = ['0–1.9', '2–3.9', '4+']
+for i in range(3):
     plt.plot(fpr[i], tpr[i], color=colors[i],
-             label=f'Class {class_names[i]} ROC curve (AUC = {roc_auc[i]:.2f})')
-plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Multiclass ROC Curves (Weighted Random Forest)')
+             label=f'Klasa {class_names[i]} ROC krivulje (AUC = {roc_auc[i]:.2f})')
+plt.plot([0, 1], [0, 1], 'k--', label='Slučajni klasifikator')
+plt.xlabel('Stopa lažno pozitivnih')
+plt.ylabel('Stopa istinsko pozitivnih')
+plt.title('ROC krivulje (Slučajna šuma)')
 plt.legend(loc='lower right')
 plt.grid(True)
 plt.tight_layout()
@@ -174,11 +180,11 @@ plt.show()
 
 
 precision, recall, pr_auc = {}, {}, {}
-colors = ['blue', 'orange', 'green', 'red']
-class_names = ['1.0-2.9', '3.0-4.9', '5.0-5.9', '6+']
+colors = ['blue', 'orange', 'green']
+class_names = ['0–1.9', '2–3.9', '4+']
 
-plt.figure(figsize=(10, 8))
-for i in range(4):
+plt.figure(figsize=(8, 6))
+for i in range(3):
     precision[i], recall[i], _ = precision_recall_curve(y_test_bin[:, i], y_score[:, i])
     pr_auc[i] = average_precision_score(y_test_bin[:, i], y_score[:, i])
     plt.plot(recall[i], precision[i], color=colors[i],
@@ -196,11 +202,11 @@ plt.tight_layout()
 plt.show()
 
 print(f"\n=== Summary ===")
-print(f"Test Period: 2020-01-01 onwards")
+print(f"Test Period: 2017-01-01 onwards")
 print(f"Training samples (original): {len(train_df)}")
 print(f"Training samples (balanced): {len(X_train)}")
 print(f"Test samples: {len(X_test)}")
 print(f"Features used: {len(features)}")
-print(f"Classes: 4 (1.0-2.9, 3.0-4.9, 5.0-5.9, 6+ magnitude)")
+print(f"Classes: 3 (0–1.9, 2–3.9, 4+ magnitude)")
 print(f"Balancing method: class_weight='balanced'")
 print(f"Model: Random Forest with 100 estimators")

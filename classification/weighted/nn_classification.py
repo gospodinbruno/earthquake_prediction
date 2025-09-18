@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, roc_curve, auc, precision_recall_curve, average_precision_score, matthews_corrcoef
 from sklearn.preprocessing import StandardScaler, label_binarize
+from sklearn.inspection import permutation_importance
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.utils import to_categorical
@@ -26,25 +27,18 @@ def focal_loss(alpha=[0.1, 0.1, 1.0, 2.0], gamma=2.0):
         Focal loss function
     """
     def focal_loss_fixed(y_true, y_pred):
-        # Convert alpha to tensor
         alpha_tensor = tf.constant(alpha, dtype=tf.float32)
         
-        # Clip predictions to prevent log(0)
         y_pred = tf.clip_by_value(y_pred, 1e-8, 1.0 - 1e-8)
         
-        # Calculate cross entropy
         ce = -y_true * tf.math.log(y_pred)
         
-        # Calculate p_t
         p_t = tf.reduce_sum(y_pred * y_true, axis=1, keepdims=True)
         
-        # Calculate alpha_t for each sample
         alpha_t = tf.reduce_sum(alpha_tensor * y_true, axis=1, keepdims=True)
         
-        # Calculate focal weight
         focal_weight = alpha_t * tf.pow((1 - p_t), gamma)
         
-        # Calculate focal loss
         focal_loss = focal_weight * tf.reduce_sum(ce, axis=1, keepdims=True)
         
         return tf.squeeze(focal_loss, axis=1)
@@ -57,11 +51,9 @@ df.sort_values('Datetime', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
 
-# Filter out earthquakes with magnitude < 1.0 to avoid NaN errors
 df = df[df['Magnitude'] >= 1.0].copy()
 df.reset_index(drop=True, inplace=True)
 
-# New magnitude bins: 1.0-2.9, 3.0-4.9, 5.0-5.9, 6.0+
 bins = [1.0, 3.0, 5.0, 6.0, 10]
 labels = [0, 1, 2, 3]
 df['MagClass'] = pd.cut(df['Magnitude'], bins=bins, labels=labels, right=False).astype(int)
@@ -102,7 +94,6 @@ test_df = df[df['Datetime'] >= cutoff].copy()
 
 original_class_weights = compute_class_weight('balanced', classes=np.unique(train_df['MagClass']), y=train_df['MagClass'])
 
-# Apply square root to reduce extreme weights
 conservative_weights = np.sqrt(original_class_weights)
 class_weight_dict = {i: conservative_weights[i] for i in range(len(conservative_weights))}
 
@@ -135,7 +126,6 @@ X_test_scaled = scaler.transform(X_test)
 y_train_cat = to_categorical(y_train, num_classes=4)
 y_test_cat = to_categorical(y_test, num_classes=4)
 
-# --- Neural Network Model ---
 model = Sequential([
     Dense(64, activation='relu', input_shape=(X_train_scaled.shape[1],)),
     Dropout(0.3),
@@ -144,7 +134,6 @@ model = Sequential([
     Dense(4, activation='softmax') 
 ])
 
-# Create focal loss function with your specified parameters
 focal_loss_fn = focal_loss(alpha=[0.1, 0.1, 1.0, 2.0], gamma=2.0)
 
 model.compile(optimizer=Adam(0.001), loss='categorical_crossentropy', metrics=['accuracy'])
@@ -172,7 +161,6 @@ f1_weighted = f1_score(y_test, y_pred, average='weighted')
 print(f"Macro F1 Score:    {f1_macro:.3f}")
 print(f"Weighted F1 Score: {f1_weighted:.3f}")
 
-# ===== MCC (multiclass) =====
 mcc_overall = matthews_corrcoef(y_test, y_pred)
 print(f"MCC (overall, multiclass): {mcc_overall:.3f}")
 
@@ -192,9 +180,9 @@ plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+'],
             yticklabels=['1.0-2.9', '3.0-4.9', '5.0-5.9', '6.0+'])
-plt.title("Confusion Matrix (Weighted Neural Network)")
-plt.xlabel("Predicted")
-plt.ylabel("Actual")
+plt.title("Matrica zabune (Neuronska mreža)")
+plt.xlabel("Predviđeno")
+plt.ylabel("Stvarno")
 plt.tight_layout()
 plt.show()
 
@@ -232,9 +220,9 @@ for i in range(4):
              label=f'Class {class_names[i]} ROC curve (AUC = {roc_auc[i]:.2f})')
 
 plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
-plt.title("Multiclass ROC Curves (Weighted Neural Network)")
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
+plt.title("ROC krivulja (Neural Network)")
+plt.xlabel("Stopa lažno pozitivnih")
+plt.ylabel("Stopa istinsko pozitivnih")
 plt.legend(loc="lower right")
 plt.grid(True)
 plt.tight_layout()
@@ -261,6 +249,63 @@ plt.ylabel("Precision")
 plt.legend(loc="lower left")
 plt.grid(True)
 plt.tight_layout()
+plt.show()
+
+print("\n=== Permutation Importance Analysis ===")
+
+def model_predict_wrapper(X):
+    """Wrapper function to make Keras model compatible with sklearn's permutation_importance"""
+    predictions = model.predict(X, verbose=0)
+    return np.argmax(predictions, axis=1)
+
+print("Calculating permutation importance...")
+perm_importance = permutation_importance(
+    model_predict_wrapper, 
+    X_test_scaled, 
+    y_test, 
+    n_repeats=10, 
+    random_state=42,
+    scoring='f1_macro'
+)
+
+
+feature_names = features
+croatian_feature_names = {
+    'Latitude': 'Geografska širina',
+    'Longitude': 'Geografska dužina', 
+    'Depth': 'Dubina',
+    'hour_of_day': 'Sat dana',
+    'day_of_week': 'Dan u tjednu',
+    'time_since_last_eq': 'Vrijeme od zadnjeg potresa',
+    'eq_count_last_24h': 'Broj potresa u zadnja 24h'
+}
+
+importance_df = pd.DataFrame({
+    'feature': feature_names,
+    'croatian_name': [croatian_feature_names[f] for f in feature_names],
+    'importance_mean': perm_importance.importances_mean,
+    'importance_std': perm_importance.importances_std
+}).sort_values('importance_mean', ascending=False)
+
+print("\nRezultati važnosti permutacije (F1 Macro Score):")
+print("=" * 60)
+for idx, row in importance_df.iterrows():
+    print(f"{row['croatian_name']:25s}: {row['importance_mean']:.4f} ± {row['importance_std']:.4f}")
+
+plt.figure(figsize=(12, 6))
+bars = plt.bar(range(len(importance_df)), importance_df['importance_mean'], 
+               yerr=importance_df['importance_std'], capsize=5, alpha=0.7)
+plt.xlabel('Značajke')
+plt.ylabel('Važnost permutacije')
+plt.title('Važnost značajki NN modela')
+plt.xticks(range(len(importance_df)), importance_df['croatian_name'], rotation=45, ha='right')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+
+for i, (bar, mean_val, std_val) in enumerate(zip(bars, importance_df['importance_mean'], importance_df['importance_std'])):
+    plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + std_val + 0.001, 
+             f'{mean_val:.3f}', ha='center', va='bottom', fontsize=9)
+
 plt.show()
 
 print(f"\n=== Summary ===")
